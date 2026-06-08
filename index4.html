@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="CRM Bruno" />
+<title>CRM Préstamos · Bruno Olivera</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body {
+    background: #080808;
+    color: #e0e0e0;
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    min-height: 100vh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  input, select { font-family: inherit; }
+  input[type=range] { cursor: pointer; accent-color: #d4af37; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0d0d0d; }
+  ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+
+  /* ---- SYNC STATUS BAR ---- */
+  #sync-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+    height: 3px; background: transparent;
+    transition: background 0.3s;
+  }
+  #sync-bar.syncing { background: linear-gradient(90deg, #d4af37, #22c55e, #d4af37); background-size: 200%; animation: syncSlide 1s linear infinite; }
+  #sync-bar.error { background: #ef4444; }
+  #sync-bar.ok { background: #22c55e; animation: fadeOut 2s forwards 0.5s; }
+  @keyframes syncSlide { 0%{background-position:0%} 100%{background-position:200%} }
+  @keyframes fadeOut { to { opacity: 0; } }
+
+  /* ---- HEADER ---- */
+  #header {
+    background: #0d0d0d;
+    border-bottom: 1px solid #1a1a1a;
+    padding: 16px 20px;
+    padding-top: calc(16px + env(safe-area-inset-top));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #d4af37;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 900; color: #0a0a0a; flex-shrink: 0;
+  }
+  .header-title { font-size: 14px; font-weight: 700; color: #d4af37; letter-spacing: 2px; text-transform: uppercase; }
+  .header-sub { font-size: 10px; color: #555; letter-spacing: 1px; }
+  .header-status {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dot-green { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+  .sync-icon {
+    font-size: 16px; cursor: pointer; padding: 4px;
+    transition: opacity 0.2s;
+  }
+  .sync-icon:active { opacity: 0.6; }
+
+  /* ---- TABS (desktop) ---- */
+  #tabs {
+    display: flex;
+    border-bottom: 1px solid #1a1a1a;
+    background: #0d0d0d;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab-btn {
+    background: none; border: none;
+    border-bottom: 2px solid transparent;
+    color: #555;
+    padding: 12px 18px;
+    font-size: 12px; font-weight: 400;
+    letter-spacing: 1px; text-transform: uppercase;
+    white-space: nowrap; transition: color 0.2s;
+    min-height: 44px;
+  }
+  .tab-btn.active { border-bottom-color: #d4af37; color: #d4af37; font-weight: 700; }
+  .tab-btn:hover:not(.active) { color: #888; }
+
+  /* ---- BOTTOM NAV (mobile) ---- */
+  #bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #0d0d0d;
+    border-top: 1px solid #1a1a1a;
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottom-nav-inner {
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+  }
+  .bnav-btn {
+    flex: 1;
+    background: none; border: none;
+    color: #555;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 10px 4px 8px;
+    font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase;
+    gap: 4px; min-height: 56px;
+    transition: color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bnav-btn .bnav-icon { font-size: 20px; line-height: 1; }
+  .bnav-btn.active { color: #d4af37; }
+
+  /* ---- CONTENT ---- */
+  #content { padding: 20px; max-width: 900px; margin: 0 auto; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ---- METRIC CARDS ---- */
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .metric-card {
+    background: #111; border: 1px solid #2a2a2a; border-radius: 12px;
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .metric-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+  .metric-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric-sub { font-size: 11px; color: #555; }
+
+  /* ---- BADGE ---- */
+  .badge {
+    border-radius: 6px; font-size: 11px; padding: 2px 8px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    border-width: 1px; border-style: solid; display: inline-block;
+  }
+  .badge-activo { background: #0a2e1a; color: #22c55e; border-color: #16a34a; }
+  .badge-mora { background: #2e1a0a; color: #f97316; border-color: #ea580c; }
+  .badge-pagado { background: #1a1a2e; color: #8b8fa8; border-color: #4b5563; }
+  .badge-pendiente { background: #2e2a0a; color: #eab308; border-color: #ca8a04; }
+
+  /* ---- PROGRESS BAR ---- */
+  .progress-wrap { background: #1a1a1a; border-radius: 4px; height: 6px; overflow: hidden; width: 100%; }
+  .progress-bar { height: 100%; border-radius: 4px; transition: width 0.5s; }
+
+  /* ---- BUTTONS ---- */
+  .btn {
+    border-radius: 8px; font-size: 13px; font-weight: 600;
+    padding: 10px 18px; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 4px;
+    min-height: 40px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:hover { opacity: 0.8; }
+  .btn:active { opacity: 0.6; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: #d4af37; color: #0a0a0a; border: none; }
+  .btn-secondary { background: transparent; color: #d4af37; border: 1px solid #d4af37; }
+  .btn-danger { background: transparent; color: #ef4444; border: 1px solid #ef4444; }
+  .btn-ghost { background: transparent; color: #888; border: 1px solid #2a2a2a; }
+  .btn-sm { padding: 8px 14px; font-size: 12px; min-height: 36px; }
+
+  /* ---- CARDS ---- */
+  .card {
+    background: #111; border: 1px solid #1a1a1a; border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 12px;
+  }
+  .card-dark { background: #0d0d0d; border-radius: 8px; padding: 8px 12px; }
+
+  /* ---- SECTION TITLE ---- */
+  .section-title { font-size: 11px; color: #555; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+
+  /* ---- ROW UTILS ---- */
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row-between { display: flex; justify-content: space-between; align-items: center; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .mb-12 { margin-bottom: 12px; }
+  .mb-16 { margin-bottom: 16px; }
+  .mb-20 { margin-bottom: 20px; }
+  .mb-24 { margin-bottom: 24px; }
+
+  /* ---- MODAL ---- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    z-index: 1000; display: none;
+    align-items: flex-end; justify-content: center; padding: 0;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: #111; border: 1px solid #2a2a2a; border-radius: 20px 20px 0 0;
+    padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
+    width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto;
+    animation: slideUp 0.25s ease-out;
+  }
+  @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal-handle { width: 40px; height: 4px; background: #333; border-radius: 2px; margin: 0 auto 20px; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .modal-title { color: #d4af37; font-size: 16px; font-weight: 700; }
+  .modal-close { background: none; border: none; color: #666; font-size: 24px; line-height: 1; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+
+  /* ---- FORM FIELDS ---- */
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: #888; margin-bottom: 6px; }
+  .field input, .field select, .field textarea {
+    width: 100%; background: #1a1a1a; border: 1px solid #2a2a2a;
+    border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 16px;
+    outline: none; font-family: inherit;
+    -webkit-appearance: none;
+  }
+  .field select option { background: #1a1a1a; }
+  .field input:focus, .field select:focus { border-color: #d4af37; }
+
+  /* ---- TABLE ---- */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead tr { background: #0d0d0d; }
+  th {
+    padding: 10px 12px; text-align: right; color: #555;
+    font-size: 10px; font-weight: 600; letter-spacing: 1px;
+    border-bottom: 1px solid #1a1a1a;
+  }
+  td { padding: 10px 12px; text-align: right; border-bottom: 1px solid #111; }
+  tbody tr:nth-child(even) { background: #0d0d0d; }
+  tbody tr:nth-child(odd) { background: #111; }
+
+  /* ---- ESCALAR ---- */
+  .escalar-header {
+    background: linear-gradient(135deg, #111 0%, #0d0d0d 100%);
+    border: 1px solid #d4af3733; border-radius: 16px; padding: 20px; margin-bottom: 20px;
+  }
+  .script-btn-group { display: flex; gap: 0; margin-bottom: 16px; }
+  .script-step-btn {
+    flex: 1; background: #0d0d0d; color: #555; border: 1px solid #1a1a1a;
+    padding: 8px 4px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    transition: background 0.2s, color 0.2s; min-height: 36px;
+  }
+  .script-step-btn.active { background: #d4af37; color: #0a0a0a; }
+
+  /* ---- QUICK CALC ---- */
+  .quick-calc-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+  .calc-box { background: #0d0d0d; border-radius: 8px; padding: 10px 14px; }
+  .calc-box .calc-label { font-size: 10px; color: #555; margin-bottom: 4px; }
+
+  /* ---- HITO ---- */
+  .hito-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .hito-box { background: #0d0d0d; border-radius: 8px; padding: 14px; }
+
+  /* ---- TIP ---- */
+  .tip-card {
+    background: #111; border: 1px solid #d4af3733; border-radius: 12px;
+    padding: 18px; margin-top: 14px;
+  }
+
+  /* empty states */
+  .empty-state { text-align: center; padding: 60px; color: #444; }
+  .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
+
+  /* today card border */
+  .cobro-card-ok { border-color: #16a34a44 !important; }
+
+  /* ---- SETUP SCREEN ---- */
+  #setup-screen {
+    position: fixed; inset: 0; background: #080808;
+    z-index: 999; display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  #setup-screen.hidden { display: none; }
+  .setup-box {
+    background: #111; border: 1px solid #d4af3733; border-radius: 20px;
+    padding: 32px 28px; width: 100%; max-width: 420px; text-align: center;
+  }
+  .setup-box h2 { color: #d4af37; font-size: 18px; margin-bottom: 8px; }
+  .setup-box p { color: #666; font-size: 13px; line-height: 1.6; margin-bottom: 24px; }
+  .setup-field { text-align: left; margin-bottom: 16px; }
+  .setup-field label { display: block; font-size: 11px; color: #888; margin-bottom: 6px; letter-spacing: 1px; }
+  .setup-field input {
+    width: 100%; background: #1a1a1a; border: 1px solid #2a2a2a;
+    border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 16px;
+    outline: none; font-family: inherit; -webkit-appearance: none;
+  }
+  .setup-field input:focus { border-color: #d4af37; }
+  .setup-hint { font-size: 11px; color: #444; margin-top: 16px; line-height: 1.5; }
+
+  /* ---- SYNC TOAST ---- */
+  #toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px;
+    padding: 10px 18px; font-size: 12px; color: #888;
+    opacity: 0; transition: opacity 0.3s, transform 0.3s;
+    z-index: 500; white-space: nowrap; pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (min-width: 640px) {
+    .modal-overlay { align-items: center; padding: 16px; }
+    .modal-box { border-radius: 16px; max-height: 85vh; }
+    .modal-handle { display: none; }
+    #bottom-nav { display: none !important; }
+    #tabs { display: flex !important; }
+    #content { padding-bottom: 24px; }
+  }
+
+  @media (max-width: 639px) {
+    #tabs { display: none; }
+    #bottom-nav { display: block; }
+    #content { padding: 14px 14px 80px; }
+    .metrics-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .hito-grid { grid-template-columns: 1fr; }
+    th, td { padding: 8px 8px; font-size: 11px; }
+    .metric-value { font-size: 17px; }
+    .btn { min-height: 44px; }
+    .btn-sm { min-height: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SYNC BAR -->
+<div id="sync-bar"></div>
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen">
+  <div class="setup-box">
+    <div style="font-size:32px;margin-bottom:16px">🔐</div>
+    <h2>CRM Bruno Olivera</h2>
+    <p>Para sincronizar tus datos entre la computadora y el iPhone, ingresá una clave secreta. <strong style="color:#d4af37">Usá la misma clave en todos tus dispositivos.</strong></p>
+    <div class="setup-field">
+      <label>Clave de sincronización</label>
+      <input type="password" id="setup-key" placeholder="Ej: bruno2024" autocomplete="current-password" />
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:15px;min-height:48px" onclick="startWithKey()">Entrar al CRM</button>
+    <div class="setup-hint">Esta clave protege tus datos. Anotala en un lugar seguro.<br/>Si usás la misma en otro dispositivo, los datos se sincronizan automáticamente.</div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- HEADER -->
+<div id="header">
+  <div class="avatar">B</div>
+  <div>
+    <div class="header-title">Bruno Olivera</div>
+    <div class="header-sub">Sistema de Préstamos · Zona Sur</div>
+  </div>
+  <div class="header-status">
+    <div class="dot-green" id="sync-dot" style="background:#555;box-shadow:none" title="Estado de sincronización"></div>
+    <span style="font-size:11px;color:#555" id="active-count">0 activos</span>
+    <span class="sync-icon" onclick="forcSync()" title="Sincronizar ahora">↻</span>
+    <button onclick="cerrarSesion()" title="Cambiar clave / Cerrar sesión" style="background:none;border:1px solid #ef4444;color:#ef4444;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;min-height:32px">⏻ Salir</button>
+  </div>
+</div>
+
+<!-- TABS (desktop) -->
+<div id="tabs">
+  <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+  <button class="tab-btn" data-tab="prestamos">Préstamos</button>
+  <button class="tab-btn" data-tab="clientes">Clientes</button>
+  <button class="tab-btn" data-tab="cobros">Cobros</button>
+  <button class="tab-btn" data-tab="proyeccion">Proyección</button>
+  <button class="tab-btn" data-tab="escalar">Escalar</button>
+</div>
+
+<!-- CONTENT -->
+<div id="content">
+
+  <!-- DASHBOARD -->
+  <div class="tab-panel active" id="tab-dashboard">
+    <div class="metrics-grid" id="dash-metrics"></div>
+    <div class="mb-24">
+      <div class="section-title">Cobros de hoy</div>
+      <div id="cobros-hoy-list"></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-title">Proyección capital (6 meses)</div>
+      <div style="position:relative;height:160px"><canvas id="mini-chart"></canvas></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="openModal('modal-cliente')">+ Nuevo cliente</button>
+      <button class="btn btn-secondary" onclick="openModal('modal-prestamo')">+ Nuevo préstamo</button>
+      <button class="btn btn-secondary" onclick="openModal('modal-cobro')">+ Registrar cobro</button>
+    </div>
+  </div>
+
+  <!-- PRÉSTAMOS -->
+  <div class="tab-panel" id="tab-prestamos">
+    <div class="row-between mb-20">
+      <div class="section-title" id="prestamos-count" style="margin:0">0 préstamos</div>
+      <button class="btn btn-primary" onclick="openModal('modal-prestamo')">+ Nuevo</button>
+    </div>
+    <div class="card mb-24">
+      <div class="section-title">Calculadora rápida</div>
+      <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:130px" class="field" style="margin:0">
+          <label>Monto</label>
+          <input type="number" id="calc-monto" value="400000" oninput="updateCalc()" style="background:#0d0d0d" />
+        </div>
+        <div style="min-width:130px">
+          <label style="font-size:11px;color:#888;display:block;margin-bottom:6px">Plazo: <span id="calc-plazo-val">30</span> días</label>
+          <input type="range" min="7" max="60" value="30" id="calc-plazo" oninput="updateCalc()" style="width:100%" />
+        </div>
+      </div>
+      <div class="quick-calc-results" id="calc-results"></div>
+    </div>
+    <div id="prestamos-list"></div>
+  </div>
+
+  <!-- CLIENTES -->
+  <div class="tab-panel" id="tab-clientes">
+    <div class="row-between mb-20">
+      <div class="section-title" id="clientes-count" style="margin:0">0 clientes</div>
+      <button class="btn btn-primary" onclick="openModal('modal-cliente')">+ Nuevo</button>
+    </div>
+    <div id="clientes-list"></div>
+  </div>
+
+  <!-- COBROS -->
+  <div class="tab-panel" id="tab-cobros">
+    <div class="row-between mb-20">
+      <div class="section-title" id="cobros-count" style="margin:0">0 cobros</div>
+      <button class="btn btn-primary" onclick="openModal('modal-cobro')">+ Cobro</button>
+    </div>
+    <div class="metrics-grid" id="cobros-metrics" style="grid-template-columns:1fr 1fr 1fr"></div>
+    <div id="cobros-list"></div>
+  </div>
+
+  <!-- PROYECCIÓN -->
+  <div class="tab-panel" id="tab-proyeccion">
+    <div class="card mb-20">
+      <div class="section-title">Parámetros del modelo</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="field" style="margin:0">
+          <label>Capital inicial</label>
+          <input type="number" id="cfg-capital" style="color:#d4af37;background:#0d0d0d" oninput="saveConfig()" />
+        </div>
+        <div>
+          <label style="font-size:11px;color:#888;display:block;margin-bottom:6px">Mora estimada (%)</label>
+          <div class="row">
+            <input type="range" min="0" max="20" step="1" id="cfg-mora" style="flex:1" oninput="saveConfig()" />
+            <span style="color:#f97316;font-weight:700;font-size:14px;min-width:32px" id="cfg-mora-val"></span>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:#888;display:block;margin-bottom:6px">Reinversión (%)</label>
+          <div class="row">
+            <input type="range" min="50" max="100" step="5" id="cfg-reinversion" style="flex:1" oninput="onReinversionChange()" />
+            <span style="color:#22c55e;font-weight:700;font-size:14px;min-width:32px" id="cfg-reinversion-val"></span>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:#888;display:block;margin-bottom:6px">Retiro mensual (%)</label>
+          <div class="row">
+            <input type="range" min="0" max="50" step="5" id="cfg-retiro" style="flex:1" oninput="onRetiroChange()" />
+            <span style="color:#d4af37;font-weight:700;font-size:14px;min-width:32px" id="cfg-retiro-val"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-20">
+      <div class="section-title">Capital vs Retiro mensual</div>
+      <div style="display:flex;gap:12px;margin-bottom:12px;font-size:11px;flex-wrap:wrap">
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#d4af37;display:inline-block"></span>Capital</span>
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#22c55e;display:inline-block"></span>Reinversión</span>
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#a78bfa;display:inline-block"></span>Retiro</span>
+      </div>
+      <div style="position:relative;height:220px"><canvas id="projection-chart"></canvas></div>
+    </div>
+
+    <div class="card" style="overflow:hidden;padding:0;margin-bottom:0">
+      <div style="padding:14px 18px;border-bottom:1px solid #1a1a1a">
+        <div class="section-title" style="margin-bottom:8px">Proyección mes a mes · 18 meses</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:#555">
+          <span style="color:#d4af37">■ Capital</span>
+          <span style="color:#e0e0e0">■ Ganancia</span>
+          <span style="color:#ef4444">■ Mora</span>
+          <span style="color:#22c55e">■ Reinversión</span>
+          <span style="color:#a78bfa">■ Retiro</span>
+          <span style="color:#38bdf8">■ Cobros/día</span>
+          <span style="color:#f97316">■ Acum. retiro</span>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mes</th><th>Capital</th><th>Ganancia</th><th>Mora</th>
+              <th>Reinvers.</th><th>Retiro</th><th>Cobros/día</th><th>Acum.</th>
+            </tr>
+          </thead>
+          <tbody id="proyeccion-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#d4af3722;margin-top:16px">
+      <div class="section-title">Calculadora de hitos</div>
+      <div class="field" style="margin-bottom:14px">
+        <label>¿Cuándo retiro $... por mes?</label>
+        <input type="range" min="100000" max="5000000" step="50000" id="hito-meta" value="600000" oninput="renderHito()" style="width:100%;margin-bottom:8px" />
+        <div style="font-size:16px;color:#d4af37;font-weight:700" id="hito-meta-val"></div>
+      </div>
+      <div class="hito-grid" id="hito-result"></div>
+    </div>
+  </div>
+
+  <!-- ESCALAR -->
+  <div class="tab-panel" id="tab-escalar">
+    <div class="escalar-header">
+      <div style="font-size:10px;color:#d4af37;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px">Hoja de ruta</div>
+      <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px">Plan de escalabilidad</div>
+      <div style="font-size:12px;color:#666">Bruno Olivera · Zona Sur · 41% mensual</div>
+    </div>
+    <div id="fases-list"></div>
+    <div class="tip-card">
+      <div style="font-size:10px;color:#d4af37;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px">💡 Consejo del día</div>
+      <div style="font-size:13px;color:#ccc;line-height:1.7" id="tip-del-dia"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="section-title">Guión de venta para kiosco</div>
+      <div id="script-venta"></div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<!-- BOTTOM NAV (mobile only) -->
+<div id="bottom-nav">
+  <div class="bottom-nav-inner">
+    <button class="bnav-btn active" data-tab="dashboard"><span class="bnav-icon">📊</span>Inicio</button>
+    <button class="bnav-btn" data-tab="prestamos"><span class="bnav-icon">💰</span>Préstamos</button>
+    <button class="bnav-btn" data-tab="clientes"><span class="bnav-icon">👥</span>Clientes</button>
+    <button class="bnav-btn" data-tab="cobros"><span class="bnav-icon">✅</span>Cobros</button>
+    <button class="bnav-btn" data-tab="proyeccion"><span class="bnav-icon">📈</span>Proyección</button>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-cliente">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Nuevo cliente</div>
+      <button class="modal-close" onclick="closeModal('modal-cliente')">×</button>
+    </div>
+    <div class="field"><label>Nombre completo</label><input type="text" id="f-cliente-nombre" placeholder="Ej: María González" autocomplete="off" /></div>
+    <div class="field"><label>Tipo de comercio</label>
+      <select id="f-cliente-tipo">
+        <option value="kiosco">Kiosco</option>
+        <option value="verduleria">Verdulería</option>
+        <option value="almacen">Almacén</option>
+        <option value="barberia">Barbería/Peluquería</option>
+        <option value="panaderia">Panadería</option>
+        <option value="perfumeria">Perfumería</option>
+        <option value="carniceria">Carnicería</option>
+        <option value="otro">Otro</option>
+      </select>
+    </div>
+    <div class="field"><label>Teléfono</label><input type="tel" id="f-cliente-tel" placeholder="Ej: 11 1234-5678" /></div>
+    <div class="field"><label>Zona / Dirección referencial</label><input type="text" id="f-cliente-zona" placeholder="Ej: Temperley centro" /></div>
+    <div class="field"><label>Notas (opcional)</label><input type="text" id="f-cliente-notas" placeholder="Observaciones" /></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn btn-ghost" onclick="closeModal('modal-cliente')">Cancelar</button>
+      <button class="btn btn-primary" onclick="addCliente()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-prestamo">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Nuevo préstamo</div>
+      <button class="modal-close" onclick="closeModal('modal-prestamo')">×</button>
+    </div>
+    <div class="field"><label>Cliente</label>
+      <select id="f-prestamo-cliente"><option value="">— Seleccionar cliente —</option></select>
+    </div>
+    <div class="field"><label>Monto a prestar ($)</label><input type="number" id="f-prestamo-monto" placeholder="Ej: 400000" oninput="updatePrestamoCalc()" /></div>
+    <div class="field"><label>Fecha de inicio</label><input type="date" id="f-prestamo-fecha" /></div>
+    <div class="field">
+      <label>Plazo (días): <span id="f-prestamo-plazo-val">30</span></label>
+      <input type="range" min="7" max="60" step="1" value="30" id="f-prestamo-plazo" oninput="updatePrestamoCalc()" style="width:100%" />
+    </div>
+    <div id="prestamo-preview" style="display:none;background:#0d0d0d;border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('modal-prestamo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="addPrestamo()">Crear</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-cobro">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Registrar cobro</div>
+      <button class="modal-close" onclick="closeModal('modal-cobro')">×</button>
+    </div>
+    <div class="field"><label>Préstamo</label>
+      <select id="f-cobro-prestamo" onchange="onCobroPrestamoChange()"><option value="">— Seleccionar préstamo —</option></select>
+    </div>
+    <div class="field"><label>Monto cobrado ($)</label><input type="number" id="f-cobro-monto" /></div>
+    <div class="field"><label>Fecha</label><input type="date" id="f-cobro-fecha" /></div>
+    <div class="field"><label>Nota (opcional)</label><input type="text" id="f-cobro-nota" placeholder="Ej: pagó con adelanto" /></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('modal-cobro')">Cancelar</button>
+      <button class="btn btn-primary" onclick="addCobro()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-detalle">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Historial de cobros</div>
+      <button class="modal-close" onclick="closeModal('modal-detalle')">×</button>
+    </div>
+    <div id="modal-detalle-content"></div>
+  </div>
+</div>
+
+<script>
+// ======================== STATE & CONSTANTS ========================
+const TASA = 0.41;
+const REINVERSION_DEFAULT = 85;
+const RETIRO_DEFAULT = 15;
+const MORA_DEFAULT = 5;
+
+// ======================== CLOUD SYNC (Firebase REST) ========================
+// Using Firebase Realtime Database (free tier) via REST API
+// Data is keyed by a hash of the user's password — no login required
+const FIREBASE_URL = 'https://crm-bruno-default-rtdb.firebaseio.com';
+
+let SYNC_KEY = '';
+let syncPending = false;
+let syncTimeout = null;
+let lastSyncTime = 0;
+
+function hashKey(str) {
+  // Simple deterministic hash for the storage path
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return 'u' + Math.abs(hash).toString(36);
+}
+
+function getDbPath() {
+  return `${FIREBASE_URL}/crm/${SYNC_KEY}.json`;
+}
+
+async function syncToCloud() {
+  if (!SYNC_KEY) return;
+  setSyncStatus('syncing');
+  try {
+    const data = {
+      clientes,
+      prestamos,
+      cobros,
+      config,
+      updatedAt: Date.now()
+    };
+    const res = await fetch(getDbPath(), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    setSyncStatus('ok');
+    lastSyncTime = Date.now();
+    saveLS('crm_sync_key', SYNC_KEY);
+    showToast('✓ Datos sincronizados');
+  } catch(e) {
+    setSyncStatus('error');
+    showToast('⚠ Sin conexión — datos guardados localmente');
+  }
+}
+
+async function loadFromCloud() {
+  if (!SYNC_KEY) return false;
+  setSyncStatus('syncing');
+  try {
+    const res = await fetch(getDbPath());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data) {
+      // No data in cloud yet — upload local data
+      setSyncStatus('ok');
+      await syncToCloud();
+      return true;
+    }
+    // Cloud has data — check if it's newer than local
+    const localUpdatedAt = loadLS('crm_updatedAt', 0);
+    if (data.updatedAt && data.updatedAt > localUpdatedAt) {
+      // Cloud is newer — load it
+      clientes = data.clientes || [];
+      prestamos = data.prestamos || [];
+      cobros = data.cobros || [];
+      if (data.config) config = data.config;
+      saveAllLocal();
+      showToast('↓ Datos actualizados desde la nube');
+    } else {
+      // Local is newer or same — upload to cloud
+      await syncToCloud();
+    }
+    setSyncStatus('ok');
+    lastSyncTime = Date.now();
+    return true;
+  } catch(e) {
+    setSyncStatus('error');
+    showToast('⚠ Sin conexión — usando datos locales');
+    return false;
+  }
+}
+
+function scheduleSyncToCloud() {
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(() => {
+    syncToCloud();
+    saveLS('crm_updatedAt', Date.now());
+  }, 1500);
+}
+
+function forcSync() {
+  clearTimeout(syncTimeout);
+  saveLS('crm_updatedAt', Date.now());
+  syncToCloud();
+}
+
+function setSyncStatus(status) {
+  const bar = document.getElementById('sync-bar');
+  const dot = document.getElementById('sync-dot');
+  bar.className = '';
+  if (status === 'syncing') {
+    bar.classList.add('syncing');
+    dot.style.background = '#d4af37';
+    dot.style.boxShadow = '0 0 6px #d4af37';
+  } else if (status === 'ok') {
+    bar.classList.add('ok');
+    dot.style.background = '#22c55e';
+    dot.style.boxShadow = '0 0 6px #22c55e';
+  } else if (status === 'error') {
+    bar.classList.add('error');
+    dot.style.background = '#ef4444';
+    dot.style.boxShadow = '0 0 6px #ef4444';
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Poll for changes from other devices every 30 seconds
+setInterval(() => {
+  if (SYNC_KEY && !syncPending) {
+    fetch(getDbPath())
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.updatedAt && data.updatedAt > lastSyncTime + 5000) {
+          // Another device updated data
+          clientes = data.clientes || clientes;
+          prestamos = data.prestamos || prestamos;
+          cobros = data.cobros || cobros;
+          if (data.config) config = data.config;
+          saveAllLocal();
+          lastSyncTime = data.updatedAt;
+          renderAll();
+          showToast('↓ Datos actualizados desde otro dispositivo');
+        }
+      }).catch(() => {});
+  }
+}, 5000);
+
+// ======================== SETUP ========================
+async function startWithKey() {
+  const keyInput = document.getElementById('setup-key');
+  const rawKey = keyInput.value.trim();
+  if (!rawKey) { keyInput.focus(); showToast('Ingresá tu clave'); return; }
+  SYNC_KEY = hashKey(rawKey);
+  document.getElementById('setup-screen').classList.add('hidden');
+  const ok = await loadFromCloud();
+  renderAll();
+  populateSelects();
+  setTimeout(renderMiniChart, 150);
+  const hitoEl = document.getElementById('hito-meta');
+  if (hitoEl) hitoEl.addEventListener('input', renderHito);
+  syncConfigUI();
+}
+
+// ======================== LOCAL STORAGE HELPERS ========================
+function loadLS(key, def) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch { return def; }
+}
+function saveLS(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+function saveAllLocal() {
+  saveLS('crm_clientes_v2', clientes);
+  saveLS('crm_prestamos_v2', prestamos);
+  saveLS('crm_cobros_v2', cobros);
+  saveLS('crm_config_v2', config);
+}
+
+let clientes = loadLS('crm_clientes_v2', []);
+let prestamos = loadLS('crm_prestamos_v2', []);
+let cobros = loadLS('crm_cobros_v2', []);
+let config = loadLS('crm_config_v2', { capitalInicial: 1500000, reinversion: REINVERSION_DEFAULT, mora: MORA_DEFAULT, retiro: RETIRO_DEFAULT, gastos: 200000 });
+
+function saveClientes() { saveLS('crm_clientes_v2', clientes); scheduleSyncToCloud(); }
+function savePrestamos() { saveLS('crm_prestamos_v2', prestamos); scheduleSyncToCloud(); }
+function saveCobros() { saveLS('crm_cobros_v2', cobros); scheduleSyncToCloud(); }
+function saveConfig() {
+  config.capitalInicial = parseFloat(document.getElementById('cfg-capital').value) || 1500000;
+  config.mora = parseInt(document.getElementById('cfg-mora').value);
+  saveLS('crm_config_v2', config);
+  scheduleSyncToCloud();
+  syncConfigUI();
+  renderProyeccion();
+  renderHito();
+}
+
+// ======================== FORMATTERS ========================
+const fmt = n => Math.round(n).toLocaleString('es-AR');
+const fmtK = n => {
+  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1000) return (n/1000).toFixed(0) + 'K';
+  return Math.round(n).toString();
+};
+const today = () => new Date().toISOString().split('T')[0];
+
+// ======================== COMPUTED ========================
+const getActivos = () => prestamos.filter(p => p.status === 'activo' || p.status === 'mora');
+const getCapitalActivo = () => getActivos().reduce((s,p) => s+p.capital, 0);
+const getTotalCobrado = id => cobros.filter(c => c.prestamoId === id).reduce((s,c) => s+c.monto, 0);
+const getCobradoHoy = id => cobros.filter(c => c.prestamoId === id && c.fecha === today()).reduce((s,c) => s+c.monto, 0);
+const getMoraHoy = () => getActivos().filter(p => !cobros.some(c => c.prestamoId === p.id && c.fecha === today())).length;
+const getCobrosHoyTotal = () => cobros.filter(c => c.fecha === today()).reduce((s,c) => s+c.monto, 0);
+const getGananciasReales = () => {
+  let total = 0;
+  prestamos.forEach(p => {
+    const tc = getTotalCobrado(p.id);
+    total += Math.max(0, tc - p.capital);
+  });
+  return total;
+};
+const calcPrestamo = (monto, plazo=30) => {
+  const capital = parseFloat(monto)||0;
+  const interes = capital * TASA;
+  const total = capital + interes;
+  const cuotaDiaria = total / plazo;
+  return { capital, interes, total, cuotaDiaria, plazo };
+};
+const calcProjection = () => {
+  const rows = [];
+  let capital = config.capitalInicial;
+  for (let m=1; m<=18; m++) {
+    const gananciaBruta = capital * TASA * (1 - config.mora/100);
+    const moraMonto = capital * TASA * (config.mora/100);
+    const retiro = gananciaBruta * (config.retiro/100);
+    const reinvertido = gananciaBruta * (config.reinversion/100);
+    const cobrosDia = capital * (1 + TASA) / 30;
+    capital = capital + reinvertido;
+    rows.push({ mes: m, capital, gananciaBruta: Math.round(gananciaBruta), moraMonto: Math.round(moraMonto), reinvertido: Math.round(reinvertido), retiro: Math.round(retiro), cobrosDia: Math.round(cobrosDia) });
+  }
+  return rows;
+};
+
+// ======================== TABS ========================
+let activeTab = 'dashboard';
+let projChart = null, miniChart = null;
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.bnav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  renderTab();
+}
+
+document.querySelectorAll('.tab-btn, .bnav-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+function renderTab() {
+  renderAll();
+  if (activeTab === 'proyeccion') setTimeout(renderProjChart, 100);
+  if (activeTab === 'dashboard') setTimeout(renderMiniChart, 100);
+}
+
+// ======================== MODALS ========================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ======================== RENDER ALL ========================
+function renderAll() {
+  renderHeader();
+  if (activeTab === 'dashboard') renderDashboard();
+  if (activeTab === 'prestamos') renderPrestamos();
+  if (activeTab === 'clientes') renderClientes();
+  if (activeTab === 'cobros') renderCobros();
+  if (activeTab === 'proyeccion') renderProyeccion();
+  if (activeTab === 'escalar') renderEscalar();
+}
+
+// ======================== HEADER ========================
+function renderHeader() {
+  document.getElementById('active-count').textContent = getActivos().length + ' activos';
+}
+
+// ======================== DASHBOARD ========================
+function renderDashboard() {
+  const enMora = getMoraHoy();
+  const cobrosHoy = getCobrosHoyTotal();
+  document.getElementById('dash-metrics').innerHTML = `
+    ${metricCard('Capital activo', '$'+fmtK(getCapitalActivo()), getActivos().length+' préstamos', '#22c55e')}
+    ${metricCard('Ganancias', '$'+fmtK(getGananciasReales()), 'Interés cobrado', '#d4af37')}
+    ${metricCard('Cobrado hoy', '$'+fmtK(cobrosHoy), new Date().toLocaleDateString('es-AR'), '#a78bfa')}
+    ${metricCard('En mora hoy', enMora, 'Sin cobro del día', enMora > 0 ? '#f97316' : '#22c55e')}
+  `;
+  const activos = getActivos();
+  const listEl = document.getElementById('cobros-hoy-list');
+  if (activos.length === 0) {
+    listEl.innerHTML = `<div class="card" style="text-align:center;color:#444;padding:28px">No hay préstamos activos</div>`;
+    return;
+  }
+  listEl.innerHTML = activos.map(p => {
+    const cobHoy = getCobradoHoy(p.id);
+    const cubrioHoy = cobHoy >= p.cuotaDiaria * 0.99;
+    const totalCob = getTotalCobrado(p.id);
+    const progreso = Math.min(100,(totalCob/p.total)*100);
+    const nombre = clienteNombre(p.clienteId);
+    return `
+      <div class="card ${cubrioHoy?'cobro-card-ok':''}" style="display:flex;align-items:center;gap:14px;margin-bottom:10px;border-color:${cubrioHoy?'#16a34a44':'#2a2a2a'}">
+        <div style="width:10px;height:10px;border-radius:50%;background:${cubrioHoy?'#22c55e':(p.status==='mora'?'#f97316':'#666')};flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span style="font-weight:600;font-size:14px">${esc(nombre)}</span>
+            <span style="font-size:12px;color:#d4af37;font-weight:700">$${fmt(p.cuotaDiaria)}/día</span>
+          </div>
+          <div class="progress-wrap"><div class="progress-bar" style="width:${progreso}%;background:${cubrioHoy?'#22c55e':'#d4af37'}"></div></div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px">
+            <span style="font-size:11px;color:#555">$${fmt(totalCob)} de $${fmt(p.total)}</span>
+            <span style="font-size:11px;color:${cubrioHoy?'#22c55e':'#f97316'}">${cubrioHoy?'✓ Cobrado':'Pendiente'}</span>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="quickCobro('${p.id}')">+ Cobro</button>
+      </div>
+    `;
+  }).join('');
+}
+
+// ======================== PRÉSTAMOS ========================
+function renderPrestamos() {
+  document.getElementById('prestamos-count').textContent = prestamos.length + ' préstamos';
+  updateCalc();
+  const el = document.getElementById('prestamos-list');
+  if (prestamos.length === 0) { el.innerHTML = `<div class="empty-state">No hay préstamos aún</div>`; return; }
+  el.innerHTML = [...prestamos].reverse().map(p => {
+    const cliente = clientes.find(c => c.id === p.clienteId);
+    const totalCob = getTotalCobrado(p.id);
+    const pct = Math.min(100,(totalCob/p.total)*100);
+    const cobrosP = cobros.filter(c => c.prestamoId === p.id);
+    return `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+          <div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:4px">${esc(cliente?.nombre||'Cliente eliminado')}</div>
+            <div style="font-size:11px;color:#555">${p.fechaInicio} → ${p.fechaVencimiento} · ${p.plazo}d</div>
+          </div>
+          <div>${badge(p.status)}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;font-size:12px">
+          <div class="card-dark"><div style="color:#555;margin-bottom:2px">Capital</div><div style="color:#d4af37;font-weight:700">$${fmt(p.capital)}</div></div>
+          <div class="card-dark"><div style="color:#555;margin-bottom:2px">Total</div><div style="font-weight:700">$${fmt(p.total)}</div></div>
+          <div class="card-dark"><div style="color:#555;margin-bottom:2px">Cuota/día</div><div style="color:#22c55e;font-weight:700">$${fmt(p.cuotaDiaria)}</div></div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:6px">
+            <span>Cobrado: $${fmt(totalCob)}</span><span>${pct.toFixed(0)}%</span>
+          </div>
+          <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%;background:#d4af37"></div></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="quickCobro('${p.id}')">+ Cobro</button>
+          <button class="btn btn-ghost btn-sm" onclick="openDetalle('${p.id}')">Ver (${cobrosP.length})</button>
+          ${p.status !== 'pagado' ? `<button class="btn btn-ghost btn-sm" onclick="marcarMora('${p.id}')">${p.status==='mora'?'✓ Quitar mora':'⚠ Mora'}</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="eliminarPrestamo('${p.id}')">🗑</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ======================== CLIENTES ========================
+function renderClientes() {
+  document.getElementById('clientes-count').textContent = clientes.length + ' clientes';
+  const el = document.getElementById('clientes-list');
+  if (clientes.length === 0) { el.innerHTML = `<div class="empty-state"><div class="icon">👥</div>No hay clientes</div>`; return; }
+  el.innerHTML = clientes.map(c => {
+    const prestamosC = prestamos.filter(p => p.clienteId === c.id);
+    const activos = prestamosC.filter(p => p.status==='activo'||p.status==='mora');
+    const totalPrestado = prestamosC.reduce((s,p) => s+p.capital, 0);
+    return `
+      <div class="card" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="flex:1">
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+              <span style="font-weight:700;font-size:15px">${esc(c.nombre)}</span>
+              <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:#1a1a1a;color:#888;border:1px solid #2a2a2a;text-transform:uppercase">${c.tipo}</span>
+            </div>
+            <div style="font-size:12px;color:#555;display:flex;gap:14px;flex-wrap:wrap">
+              ${c.telefono?`<a href="tel:${esc(c.telefono)}" style="color:#d4af37;text-decoration:none">📱 ${esc(c.telefono)}</a>`:''}
+              ${c.zona?`<span>📍 ${esc(c.zona)}</span>`:''}
+            </div>
+            ${c.notas?`<div style="font-size:12px;color:#666;margin-top:6px">${esc(c.notas)}</div>`:''}
+          </div>
+          <div style="text-align:right;font-size:12px">
+            <div style="color:#d4af37;font-weight:700;font-size:14px">$${fmtK(totalPrestado)}</div>
+            <div style="color:#555">prestado</div>
+            <div style="margin-top:4px;color:${activos.length>0?'#22c55e':'#555'}">${activos.length} activo${activos.length!==1?'s':''}</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="nuevoPrestamoParaCliente('${c.id}')">+ Préstamo</button>
+          ${c.telefono ? `<a href="https://wa.me/549${c.telefono.replace(/\D/g,'')}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration:none">WhatsApp</a>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="eliminarCliente('${c.id}')">🗑</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ======================== COBROS ========================
+function renderCobros() {
+  document.getElementById('cobros-count').textContent = cobros.length + ' cobros';
+  const cobrosHoy = getCobrosHoyTotal();
+  document.getElementById('cobros-metrics').innerHTML = `
+    ${metricCard('Total cobrado', '$'+fmtK(cobros.reduce((s,c)=>s+c.monto,0)), null, '#d4af37')}
+    ${metricCard('Cobros hoy', '$'+fmtK(cobrosHoy), null, '#22c55e')}
+    ${metricCard('Interés', '$'+fmtK(getGananciasReales()), null, '#d4af37')}
+  `;
+  const el = document.getElementById('cobros-list');
+  if (cobros.length === 0) { el.innerHTML = `<div class="empty-state">No hay cobros</div>`; return; }
+  el.innerHTML = [...cobros].reverse().slice(0,50).map(c => {
+    const p = prestamos.find(pr => pr.id === c.prestamoId);
+    const cliente = clientes.find(cl => cl.id === p?.clienteId);
+    return `
+      <div class="card" style="padding:12px 16px;margin-bottom:8px;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:14px">${esc(cliente?.nombre||'—')}</div>
+          ${c.nota?`<div style="font-size:11px;color:#555">${esc(c.nota)}</div>`:''}
+        </div>
+        <div style="text-align:right">
+          <div style="color:#22c55e;font-weight:700">$${fmt(c.monto)}</div>
+          <div style="font-size:11px;color:#555">${c.fecha}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ======================== PROYECCIÓN ========================
+function syncConfigUI() {
+  const c = config;
+  document.getElementById('cfg-capital').value = c.capitalInicial;
+  document.getElementById('cfg-mora').value = c.mora;
+  document.getElementById('cfg-mora-val').textContent = c.mora + '%';
+  document.getElementById('cfg-reinversion').value = c.reinversion;
+  document.getElementById('cfg-reinversion-val').textContent = c.reinversion + '%';
+  document.getElementById('cfg-retiro').value = c.retiro;
+  document.getElementById('cfg-retiro-val').textContent = c.retiro + '%';
+}
+
+function onReinversionChange() {
+  const v = parseInt(document.getElementById('cfg-reinversion').value);
+  config.reinversion = v; config.retiro = 100 - v;
+  saveLS('crm_config_v2', config); scheduleSyncToCloud();
+  syncConfigUI(); renderProyeccion(); renderHito();
+}
+function onRetiroChange() {
+  const v = parseInt(document.getElementById('cfg-retiro').value);
+  config.retiro = v; config.reinversion = 100 - v;
+  saveLS('crm_config_v2', config); scheduleSyncToCloud();
+  syncConfigUI(); renderProyeccion(); renderHito();
+}
+
+function renderProyeccion() {
+  syncConfigUI();
+  const rows = calcProjection();
+  let acum = 0;
+  document.getElementById('proyeccion-table').innerHTML = rows.map(r => {
+    acum += r.retiro;
+    return `<tr>
+      <td style="color:#555;font-weight:600">M${r.mes}</td>
+      <td style="color:#d4af37;font-weight:700">$${r.capital.toLocaleString('es-AR', {minimumFractionDigits:0,maximumFractionDigits:0})}</td>
+      <td style="color:#e0e0e0">$${fmtK(r.gananciaBruta)}</td>
+      <td style="color:#ef4444">$${fmtK(r.moraMonto)}</td>
+      <td style="color:#22c55e">$${fmtK(r.reinvertido)}</td>
+      <td style="color:#a78bfa">$${fmtK(r.retiro)}</td>
+      <td style="color:#38bdf8">$${fmtK(r.cobrosDia)}</td>
+      <td style="color:#f97316;font-weight:700">$${fmtK(acum)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderHito() {
+  const meta = parseInt(document.getElementById('hito-meta')?.value || 600000);
+  document.getElementById('hito-meta-val').textContent = 'Meta: $' + Math.round(meta).toLocaleString('es-AR');
+  const rows = calcProjection();
+  const mesHito = rows.find(r => r.retiro >= meta);
+  let acum = 0;
+  const acumulados = rows.map(r => { acum += r.retiro; return {...r, acum}; });
+  const mesAcum = acumulados.find(r => r.acum >= meta);
+  document.getElementById('hito-result').innerHTML = `
+    <div class="hito-box">
+      <div style="font-size:11px;color:#555;margin-bottom:4px">Retiro mensual de $${Math.round(meta/1000)}K</div>
+      ${mesHito ? `<div style="color:#22c55e;font-weight:700;font-size:18px">Mes ${mesHito.mes}</div>` : `<div style="color:#f97316;font-size:13px">+18 meses</div>`}
+    </div>
+    <div class="hito-box">
+      <div style="font-size:11px;color:#555;margin-bottom:4px">Acumular $${Math.round(meta/1000)}K total</div>
+      ${mesAcum ? `<div style="color:#a78bfa;font-weight:700;font-size:18px">Mes ${mesAcum.mes}</div>` : `<div style="color:#f97316;font-size:13px">+18 meses</div>`}
+    </div>
+  `;
+}
+
+function renderProjChart() {
+  const canvas = document.getElementById('projection-chart');
+  if (!canvas) return;
+  if (projChart) { projChart.destroy(); projChart = null; }
+  const rows = calcProjection();
+  projChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => `M${r.mes}`),
+      datasets: [
+        { label: 'Capital', data: rows.map(r => r.capital), backgroundColor: '#d4af37cc', borderRadius: 4 },
+        { label: 'Reinversión', data: rows.map(r => r.reinvertido), backgroundColor: '#22c55e99', borderRadius: 4 },
+        { label: 'Retiro', data: rows.map(r => r.retiro), backgroundColor: '#a78bfa99', borderRadius: 4 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#666', font: { size: 10 } }, grid: { color: '#1a1a1a' } },
+        y: { ticks: { color: '#666', font: { size: 10 }, callback: v => '$'+fmtK(v) }, grid: { color: '#1a1a1a' } },
+      },
+    },
+  });
+}
+
+function renderMiniChart() {
+  const canvas = document.getElementById('mini-chart');
+  if (!canvas) return;
+  if (miniChart) { miniChart.destroy(); miniChart = null; }
+  const rows = calcProjection().slice(0,6);
+  miniChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: rows.map(r => `M${r.mes}`),
+      datasets: [{ data: rows.map(r => r.capital), borderColor: '#d4af37', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#d4af37', fill: false, tension: 0.3 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: '#555', font: { size: 10 }, callback: v => fmtK(v) }, grid: { color: '#1a1a1a' } },
+      },
+    },
+  });
+}
+
+// ======================== ESCALAR ========================
+const TIPS = [
+  "El cobro presencial diario no es solo operativo — es tu sistema de alarma temprana.",
+  "Nunca prestés más del 30% de tu capital a un solo cliente.",
+  "El primer préstamo a un cliente nuevo siempre chico.",
+  "Antes de dar un préstamo, fijate si el comercio está en local alquilado o propio.",
+  "Si tres días seguidos un cliente no puede pagar, hablá antes de que acumule.",
+  "Tu fondo de reserva no es para gastar — es para no entrar en pánico.",
+  "Los referidos son el canal más barato.",
+  "En zona sur los kioscos y verdulerías son los mejores clientes.",
+];
+
+const ESCALAR_IDEAS = [
+  { fase: "Fase 1 — Red de referidos", tiempo: "Mes 1-3", icon: "👥", ideas: [
+    "Pedí un referido a cada cliente que pagó bien durante 2 semanas seguidas",
+    "Ofrecé una bonificación: si traen un cliente nuevo, les descontás $5.000 de la próxima cuota",
+    "Trabajá en un radio de 10 cuadras primero — la concentración geográfica hace el cobro más eficiente",
+  ]},
+  { fase: "Fase 2 — Diversificación de montos", tiempo: "Mes 3-6", icon: "📊", ideas: [
+    "Ofrecé préstamos de segunda vuelta más grandes: si pagó bien $400K, ofrecele $700K",
+    "Creá un producto de 15 días para clientes que necesitan liquidez rápida",
+    "Considerá plazos de 45 días para comercios con ventas más estacionales",
+  ]},
+  { fase: "Fase 3 — Expansión de zona", tiempo: "Mes 6-10", icon: "🗺️", ideas: [
+    "Con 8+ clientes activos, identificá el barrio adyacente con más comercios informales",
+    "El primer cliente de zona nueva debe venir por referido de uno de tus clientes actuales",
+    "Considerá incorporar a alguien de confianza para cobros en la segunda zona",
+  ]},
+  { fase: "Fase 4 — Capital $50M+", tiempo: "Mes 12+", icon: "🏗️", ideas: [
+    "Diversificá: 60% en préstamos, 25% en inmuebles para alquiler, 15% en dólares",
+    "Consultá con un contador la posibilidad de registrarte como persona física",
+    "Evaluá asociarte con un almacenero mayor que actúe como agente cobrador",
+  ]},
+];
+
+const SCRIPT_PASOS = [
+  { titulo: "Entrada", texto: "Entrás, comprás algo. Natural. No vendas nada todavía." },
+  { titulo: "La pregunta", texto: "\"Che, ¿hace mucho que tenés el kiosco?\"" },
+  { titulo: "El pitch", texto: "\"Yo presto plata a comercios del barrio. Sin banco, sin trámites. Por si alguna vez necesitás reponer stock.\"" },
+  { titulo: "Si pregunta cuánto cuesta", texto: "\"Supongamos que te presto $500K. En 30 días me devolvés de a $23.500 por día. Eso es todo, sin sorpresas.\"" },
+  { titulo: "Cierre", texto: "\"¿Te dejo mi número por si en algún momento te hace falta?\" — Le das la tarjeta y te vas. Sin presionar." },
+];
+
+let scriptPaso = 0;
+
+function renderEscalar() {
+  document.getElementById('fases-list').innerHTML = ESCALAR_IDEAS.map(f => `
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span style="font-size:24px">${f.icon}</span>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:#d4af37">${f.fase}</div>
+          <div style="font-size:11px;color:#555;margin-top:2px">${f.tiempo}</div>
+        </div>
+      </div>
+      ${f.ideas.map((idea,j) => `
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;${j===0?'border-top:1px solid #1a1a1a;':''}border-bottom:1px solid #1a1a1a">
+          <span style="color:#d4af37;font-size:12px;margin-top:2px;flex-shrink:0">→</span>
+          <span style="font-size:13px;color:#ccc;line-height:1.6">${idea}</span>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+  document.getElementById('tip-del-dia').textContent = TIPS[new Date().getDate() % TIPS.length];
+  renderScript();
+}
+
+function renderScript() {
+  const el = document.getElementById('script-venta');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="script-btn-group">
+      ${SCRIPT_PASOS.map((p,i) => `<button class="script-step-btn ${i===scriptPaso?'active':''}" onclick="setScriptPaso(${i})">${i+1}</button>`).join('')}
+    </div>
+    <div style="background:#0d0d0d;border-radius:10px;padding:14px">
+      <div style="font-size:11px;color:#d4af37;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">${SCRIPT_PASOS[scriptPaso].titulo}</div>
+      <div style="font-size:14px;color:#ccc;line-height:1.7">${SCRIPT_PASOS[scriptPaso].texto}</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:12px">
+      <button class="btn btn-ghost btn-sm" onclick="setScriptPaso(${Math.max(0,scriptPaso-1)})" ${scriptPaso===0?'disabled':''}>← Anterior</button>
+      <span style="font-size:11px;color:#555;align-self:center">Paso ${scriptPaso+1}/${SCRIPT_PASOS.length}</span>
+      <button class="btn btn-ghost btn-sm" onclick="setScriptPaso(${Math.min(SCRIPT_PASOS.length-1,scriptPaso+1)})" ${scriptPaso===SCRIPT_PASOS.length-1?'disabled':''}>Siguiente →</button>
+    </div>
+  `;
+}
+function setScriptPaso(n) { scriptPaso = n; renderScript(); }
+
+// ======================== QUICK CALC ========================
+function updateCalc() {
+  const monto = parseFloat(document.getElementById('calc-monto')?.value) || 0;
+  const plazo = parseInt(document.getElementById('calc-plazo')?.value) || 30;
+  document.getElementById('calc-plazo-val').textContent = plazo;
+  const interes = monto * TASA;
+  const total = monto + interes;
+  const dia = total / plazo;
+  document.getElementById('calc-results').innerHTML = `
+    <div class="calc-box"><div class="calc-label">Interés 41%</div><div style="color:#d4af37;font-weight:700">$${Math.round(interes).toLocaleString('es-AR')}</div></div>
+    <div class="calc-box"><div class="calc-label">Total a cobrar</div><div style="font-weight:700">$${Math.round(total).toLocaleString('es-AR')}</div></div>
+    <div class="calc-box"><div class="calc-label">Cuota/día</div><div style="color:#22c55e;font-weight:700">$${Math.round(dia).toLocaleString('es-AR')}</div></div>
+  `;
+}
+
+// ======================== ACTIONS ========================
+function addCliente() {
+  const nombre = document.getElementById('f-cliente-nombre').value.trim();
+  if (!nombre) { alert('Ingresá el nombre'); return; }
+  clientes.push({
+    id: Date.now().toString(), nombre,
+    tipo: document.getElementById('f-cliente-tipo').value,
+    telefono: document.getElementById('f-cliente-tel').value.trim(),
+    zona: document.getElementById('f-cliente-zona').value.trim(),
+    notas: document.getElementById('f-cliente-notas').value.trim(),
+    creado: new Date().toISOString(), prestamosCount: 0,
+  });
+  saveClientes();
+  document.getElementById('f-cliente-nombre').value = '';
+  document.getElementById('f-cliente-tel').value = '';
+  document.getElementById('f-cliente-zona').value = '';
+  document.getElementById('f-cliente-notas').value = '';
+  closeModal('modal-cliente');
+  renderAll();
+}
+
+function addPrestamo() {
+  const clienteId = document.getElementById('f-prestamo-cliente').value;
+  const monto = document.getElementById('f-prestamo-monto').value;
+  if (!clienteId || !monto) { alert('Completá cliente y monto'); return; }
+  const fechaInicio = document.getElementById('f-prestamo-fecha').value;
+  const plazo = parseInt(document.getElementById('f-prestamo-plazo').value);
+  const calc = calcPrestamo(monto, plazo);
+  const fechaVenc = new Date(fechaInicio);
+  fechaVenc.setDate(fechaVenc.getDate() + plazo);
+  prestamos.push({
+    id: Date.now().toString(), clienteId, ...calc,
+    fechaInicio, fechaVencimiento: fechaVenc.toISOString().split('T')[0],
+    status: 'activo', creado: new Date().toISOString(),
+  });
+  clientes = clientes.map(c => c.id === clienteId ? {...c, prestamosCount: (c.prestamosCount||0)+1} : c);
+  savePrestamos(); saveClientes();
+  document.getElementById('f-prestamo-monto').value = '';
+  document.getElementById('f-prestamo-cliente').value = '';
+  closeModal('modal-prestamo');
+  renderAll();
+}
+
+function addCobro() {
+  const prestamoId = document.getElementById('f-cobro-prestamo').value;
+  const montoStr = document.getElementById('f-cobro-monto').value;
+  if (!prestamoId || !montoStr) { alert('Completá préstamo y monto'); return; }
+  const monto = parseFloat(montoStr);
+  const nuevo = { id: Date.now().toString(), prestamoId, monto, fecha: document.getElementById('f-cobro-fecha').value, nota: document.getElementById('f-cobro-nota').value.trim() };
+  cobros.push(nuevo);
+  const p = prestamos.find(pr => pr.id === prestamoId);
+  if (p) {
+    const totalCobradoNuevo = getTotalCobrado(prestamoId);
+    if (totalCobradoNuevo >= p.total) {
+      prestamos = prestamos.map(pr => pr.id === prestamoId ? {...pr, status:'pagado'} : pr);
+    }
+  }
+  saveCobros(); savePrestamos();
+  document.getElementById('f-cobro-monto').value = '';
+  document.getElementById('f-cobro-nota').value = '';
+  document.getElementById('f-cobro-prestamo').value = '';
+  closeModal('modal-cobro');
+  renderAll();
+}
+
+function marcarMora(id) {
+  prestamos = prestamos.map(p => p.id === id ? {...p, status: p.status==='mora'?'activo':'mora'} : p);
+  savePrestamos(); renderAll();
+}
+function eliminarPrestamo(id) {
+  if (!confirm('¿Eliminar este préstamo?')) return;
+  prestamos = prestamos.filter(p => p.id !== id);
+  cobros = cobros.filter(c => c.prestamoId !== id);
+  savePrestamos(); saveCobros(); renderAll();
+}
+function eliminarCliente(id) {
+  if (!confirm('¿Eliminar este cliente?')) return;
+  clientes = clientes.filter(c => c.id !== id);
+  saveClientes(); renderAll();
+}
+
+function quickCobro(prestamoId) {
+  const p = prestamos.find(pr => pr.id === prestamoId);
+  document.getElementById('f-cobro-prestamo').value = prestamoId;
+  document.getElementById('f-cobro-monto').value = p ? Math.round(p.cuotaDiaria) : '';
+  document.getElementById('f-cobro-fecha').value = today();
+  openModal('modal-cobro');
+}
+
+function nuevoPrestamoParaCliente(clienteId) {
+  document.getElementById('f-prestamo-cliente').value = clienteId;
+  openModal('modal-prestamo');
+}
+
+function openDetalle(prestamoId) {
+  const p = prestamos.find(pr => pr.id === prestamoId);
+  const cobrosP = cobros.filter(c => c.prestamoId === prestamoId);
+  const totalCob = cobrosP.reduce((s,c) => s+c.monto, 0);
+  document.getElementById('modal-detalle-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:13px">
+      <div class="card-dark" style="padding:12px"><div style="color:#555;margin-bottom:4px;font-size:11px">Total cobrado</div><div style="color:#22c55e;font-weight:700">$${fmt(totalCob)}</div></div>
+      <div class="card-dark" style="padding:12px"><div style="color:#555;margin-bottom:4px;font-size:11px">Saldo restante</div><div style="color:#d4af37;font-weight:700">$${fmt(Math.max(0,(p?.total||0)-totalCob))}</div></div>
+    </div>
+    ${cobrosP.length === 0 ? `<div style="text-align:center;color:#444;padding:20px">Sin cobros registrados</div>` :
+      [...cobrosP].reverse().map(c => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1a1a1a;font-size:13px">
+          <div>
+            <div style="font-weight:600">$${fmt(c.monto)}</div>
+            ${c.nota?`<div style="font-size:11px;color:#555">${esc(c.nota)}</div>`:''}
+          </div>
+          <div style="font-size:11px;color:#555">${c.fecha}</div>
+        </div>
+      `).join('')
+    }
+  `;
+  openModal('modal-detalle');
+}
+
+function updatePrestamoCalc() {
+  const monto = document.getElementById('f-prestamo-monto').value;
+  const plazo = parseInt(document.getElementById('f-prestamo-plazo').value)||30;
+  document.getElementById('f-prestamo-plazo-val').textContent = plazo;
+  const preview = document.getElementById('prestamo-preview');
+  if (!monto) { preview.style.display='none'; return; }
+  const c = calcPrestamo(monto, plazo);
+  preview.style.display = 'block';
+  preview.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><span style="color:#555">Interés (41%): </span><span style="color:#d4af37">$${fmt(c.interes)}</span></div>
+      <div><span style="color:#555">Total: </span><span style="font-weight:700">$${fmt(c.total)}</span></div>
+      <div style="grid-column:1/-1"><span style="color:#555">Cuota diaria: </span><span style="color:#22c55e;font-weight:700">$${fmt(c.cuotaDiaria)}/día</span></div>
+    </div>
+  `;
+}
+
+function onCobroPrestamoChange() {
+  const id = document.getElementById('f-cobro-prestamo').value;
+  const p = prestamos.find(pr => pr.id === id);
+  if (p) document.getElementById('f-cobro-monto').value = Math.round(p.cuotaDiaria);
+}
+
+// ======================== POPULATE SELECTS ========================
+function populateSelects() {
+  const sel1 = document.getElementById('f-prestamo-cliente');
+  const cur1 = sel1.value;
+  sel1.innerHTML = `<option value="">— Seleccionar cliente —</option>` + clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+  if (cur1) sel1.value = cur1;
+
+  const activos = getActivos();
+  const sel2 = document.getElementById('f-cobro-prestamo');
+  const cur2 = sel2.value;
+  sel2.innerHTML = `<option value="">— Seleccionar préstamo —</option>` + activos.map(p => `<option value="${p.id}">${esc(clienteNombre(p.clienteId))} — $${fmtK(p.capital)}</option>`).join('');
+  if (cur2) sel2.value = cur2;
+}
+
+// ======================== UTILS ========================
+function metricCard(label, value, sub, color='#d4af37') {
+  return `<div class="metric-card">
+    <span class="metric-label">${label}</span>
+    <span class="metric-value" style="color:${color}">${value}</span>
+    ${sub ? `<span class="metric-sub">${sub}</span>` : ''}
+  </div>`;
+}
+function badge(status) {
+  const map = { activo:'activo', mora:'mora', pagado:'pagado', pendiente:'pendiente' };
+  return `<span class="badge badge-${map[status]||'activo'}">${status}</span>`;
+}
+function clienteNombre(id) { return clientes.find(c => c.id === id)?.nombre || '—'; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ======================== CERRAR SESION ========================
+function cerrarSesion() {
+  if (!confirm('¿Cerrar sesión y cambiar de clave?')) return;
+  localStorage.removeItem('crm_sync_key');
+  location.reload();
+}
+
+// ======================== INIT ========================
+// Check if we have a saved key
+const savedKey = loadLS('crm_sync_key', null);
+if (savedKey) {
+  SYNC_KEY = savedKey;
+  document.getElementById('setup-screen').classList.add('hidden');
+  loadFromCloud().then(() => {
+    document.getElementById('f-cobro-fecha').value = today();
+    document.getElementById('f-prestamo-fecha').value = today();
+    syncConfigUI();
+    renderAll();
+    populateSelects();
+    setTimeout(renderMiniChart, 150);
+    const hitoEl = document.getElementById('hito-meta');
+    if (hitoEl) hitoEl.addEventListener('input', renderHito);
+  });
+} else {
+  // Show setup, but also set up form enter key
+  document.getElementById('setup-key').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startWithKey();
+  });
+}
+
+// Override renderAll to also populate selects
+const _renderAll = renderAll;
+renderAll = function() {
+  _renderAll();
+  populateSelects();
+};
+</script>
+</body>
+</html>
